@@ -369,6 +369,16 @@
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
               </svg>
             </button>
+            <button onclick="clearExpiredTokens()" class="btn-icon hover:bg-destructive/10 hover:text-destructive"
+              title="清空失效Token">
+              <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </button>
             <div id="batchActions" class="hidden items-center gap-2">
               <button onclick="exportSelected()" class="btn-icon" title="导出选中项">
                 <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
@@ -852,6 +862,7 @@
       refreshTokens = async () => { await loadTokens(); await loadStats() },
       openAddModal = () => $('addModal').classList.remove('hidden'),
       closeAddModal = () => { $('addModal').classList.add('hidden'); $('addTokenList').value = '' },
+      clearExpiredTokens = async () => { if (!confirm('确定要清空所有失效 Token 吗?')) return; try { const r = await apiRequest('/api/tokens/clear/expired', { method: 'POST' }); if (!r) return; const d = await r.json(); if (d.success) { showToast(`已清理失效 Token ${d.data.total} 个`, 'success'); await refreshTokens() } else { showToast('清理失败: ' + (d.error || '未知错误'), 'error') } } catch (e) { showToast('清理失败: ' + e.message, 'error') } },
       deleteToken = async (t, tt) => { if (!confirm('确定要删除这个 Token 吗?')) return; try { const r = await apiRequest('/api/tokens/delete', { method: 'POST', body: JSON.stringify({ tokens: [t], token_type: tt }) }); if (!r) return; const d = await r.json(); d.success ? await refreshTokens() : showToast('删除失败: ' + (d.error || '未知错误'), 'error') } catch (e) { showToast('删除失败: ' + e.message, 'error') } },
       batchDelete = async () => { if (!selectedTokens.size || !confirm(`确定要删除选中的 ${selectedTokens.size} 个 Token 吗?此操作不可恢复!`)) return; const tbt = { sso: [], ssoSuper: [] }; document.querySelectorAll('.token-checkbox:checked').forEach(cb => tbt[cb.dataset.type].push(cb.dataset.token)); try { const ps = [];['sso', 'ssoSuper'].forEach(k => tbt[k].length && ps.push(apiRequest('/api/tokens/delete', { method: 'POST', body: JSON.stringify({ tokens: tbt[k], token_type: k }) }))); await Promise.all(ps); await refreshTokens() } catch (e) { showToast('批量删除失败: ' + e.message, 'error') } },
       submitAddTokens = async () => { const tt = $('addTokenType').value, tks = $('addTokenList').value.split('\n').map(t => t.trim()).filter(t => t); if (!tks.length) return showToast('请输入至少一个 Token', 'error'); try { const r = await apiRequest('/api/tokens/add', { method: 'POST', body: JSON.stringify({ tokens: tks, token_type: tt }) }); if (!r) return; const d = await r.json(); d.success ? (closeAddModal(), await refreshTokens()) : showToast('添加失败: ' + (d.error || '未知错误'), 'error') } catch (e) { showToast('添加失败: ' + e.message, 'error') } },

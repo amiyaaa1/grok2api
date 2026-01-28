@@ -223,6 +223,22 @@ class GrokTokenManager:
         self.token_data[token_type.value][token]["note"] = note.strip()
         self._mark_dirty()  # 批量保存
         logger.info(f"[Token] 更新备注: {token[:10]}...")
+
+    async def clear_expired_tokens(self) -> Dict[str, int]:
+        """清理失效Token"""
+        counts = {"normal": 0, "super": 0}
+        for token_type, label in [(TokenType.NORMAL.value, "normal"), (TokenType.SUPER.value, "super")]:
+            expired_tokens = [
+                token for token, data in self.token_data[token_type].items()
+                if data.get("status") == "expired"
+            ]
+            for token in expired_tokens:
+                del self.token_data[token_type][token]
+            counts[label] = len(expired_tokens)
+        if counts["normal"] or counts["super"]:
+            self._mark_dirty()
+        logger.info("[Token] 清理失效Token: normal=%s, super=%s", counts["normal"], counts["super"])
+        return counts
     
     def get_tokens(self) -> Dict[str, Any]:
         """获取所有Token"""

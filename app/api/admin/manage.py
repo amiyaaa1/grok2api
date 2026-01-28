@@ -339,6 +339,23 @@ async def delete_tokens(request: DeleteTokensRequest, _: bool = Depends(verify_a
         raise HTTPException(status_code=500, detail={"error": f"删除失败: {e}", "code": "DELETE_ERROR"})
 
 
+@router.post("/api/tokens/clear/expired")
+async def clear_expired_tokens(_: bool = Depends(verify_admin_session)) -> Dict[str, Any]:
+    """清理失效Token"""
+    try:
+        logger.debug("[Admin] 清理失效Token")
+        counts = await token_manager.clear_expired_tokens()
+        total = counts["normal"] + counts["super"]
+        return {
+            "success": True,
+            "message": f"成功清理失效Token {total} 个",
+            "data": {"normal": counts["normal"], "super": counts["super"], "total": total}
+        }
+    except Exception as e:
+        logger.error(f"[Admin] 清理失效Token异常: {e}")
+        raise HTTPException(status_code=500, detail={"error": f"清理失败: {e}", "code": "CLEAR_EXPIRED_ERROR"})
+
+
 @router.get("/api/settings")
 async def get_settings(_: bool = Depends(verify_admin_session)) -> Dict[str, Any]:
     """获取配置"""
