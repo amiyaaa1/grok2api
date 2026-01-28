@@ -86,10 +86,11 @@ volumes:
 
 ### 环境变量说明
 
-| 环境变量      | 必填 | 说明                                    | 示例 |
-|---------------|------|-----------------------------------------|------|
-| STORAGE_MODE  | 否   | 存储模式：file/mysql/redis               | file |
-| DATABASE_URL  | 否   | 数据库连接URL（MySQL/Redis模式时必需）   | mysql://user:pass@host:3306/db |
+| 环境变量             | 必填 | 说明                                              | 示例 |
+|----------------------|------|---------------------------------------------------|------|
+| STORAGE_MODE         | 否   | 存储模式：file/mysql/redis                         | file |
+| DATABASE_URL         | 否   | 数据库连接URL（MySQL/Redis模式时必需）             | mysql://user:pass@host:3306/db |
+| GROK_TOKEN_STRATEGY  | 否   | 账号选择策略：best(默认)/round_robin               | round_robin |
 
 **存储模式：**
 - `file`: 本地文件存储（默认）
@@ -177,6 +178,7 @@ volumes:
 | filtered_tags              | grok    | 否   | 过滤响应标签（逗号分隔）                | "xaiartifact,xai:tool_usage_card,grok:render" |
 | show_thinking              | grok    | 否   | 显示思考过程 true(显示)/false(隐藏)     | true   |
 | temporary                  | grok    | 否   | 会话模式 true(临时)/false               | true   |
+| token_selection_strategy   | grok    | 否   | 账号选择策略：best/round_robin          | "best" |
 
 <br>
 

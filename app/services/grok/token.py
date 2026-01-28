@@ -1,13 +1,15 @@
 """Grok Token 管理器 - 单例模式的Token负载均衡和状态管理"""
 
-import orjson
-import time
 import asyncio
-import aiofiles
-import portalocker
+import os
+import time
 from pathlib import Path
 from curl_cffi.requests import AsyncSession
 from typing import Dict, Any, Optional, Tuple
+
+import aiofiles
+import orjson
+import portalocker
 
 from app.models.grok_models import TokenType, Models
 from app.core.exception import GrokApiException
@@ -50,6 +52,10 @@ class GrokTokenManager:
         self._save_pending = False  # 标记是否有待保存的数据
         self._save_task = None  # 后台保存任务
         self._shutdown = False  # 关闭标志
+        self._rr_cursors = {
+            TokenType.NORMAL.value: 0,
+            TokenType.SUPER.value: 0
+        }
         
         self._initialized = True
         logger.debug(f"[Token] 初始化完成: {self.token_file}")
@@ -278,21 +284,60 @@ class GrokTokenManager:
                 return used[0][0], used[0][1]
             return None, None
 
+        def select_round_robin(tokens: Dict[str, Any], field: str, cursor_key: str) -> Tuple[Optional[str], Optional[int]]:
+            """轮询选择Token"""
+            eligible = []
+            for key, data in tokens.items():
+                if data.get("status") == "expired":
+                    continue
+                if data.get("failedCount", 0) >= MAX_FAILURES:
+                    continue
+                remaining = int(data.get(field, -1))
+                if remaining == 0:
+                    continue
+                eligible.append((key, remaining))
+
+            if not eligible:
+                return None, None
+
+            index = self._rr_cursors.get(cursor_key, 0) % len(eligible)
+            token_key, remaining = eligible[index]
+            self._rr_cursors[cursor_key] = (index + 1) % len(eligible)
+            return token_key, remaining
+
+        def resolve_strategy() -> str:
+            env_strategy = os.getenv("GROK_TOKEN_STRATEGY", "").strip().lower()
+            strategy = env_strategy or str(setting.grok_config.get("token_selection_strategy", "best")).lower()
+            if strategy in {"round_robin", "round-robin", "rr"}:
+                return "round_robin"
+            return "best"
+
         # 快照
         snapshot = {
             TokenType.NORMAL.value: self.token_data[TokenType.NORMAL.value].copy(),
             TokenType.SUPER.value: self.token_data[TokenType.SUPER.value].copy()
         }
 
+        strategy = resolve_strategy()
+
         # 选择策略
         if model == "grok-4-heavy":
             field = "heavyremainingQueries"
-            token_key, remaining = select_best(snapshot[TokenType.SUPER.value], field)
+            if strategy == "round_robin":
+                token_key, remaining = select_round_robin(snapshot[TokenType.SUPER.value], field, TokenType.SUPER.value)
+            else:
+                token_key, remaining = select_best(snapshot[TokenType.SUPER.value], field)
         else:
             field = "remainingQueries"
-            token_key, remaining = select_best(snapshot[TokenType.NORMAL.value], field)
+            if strategy == "round_robin":
+                token_key, remaining = select_round_robin(snapshot[TokenType.NORMAL.value], field, TokenType.NORMAL.value)
+            else:
+                token_key, remaining = select_best(snapshot[TokenType.NORMAL.value], field)
             if token_key is None:
-                token_key, remaining = select_best(snapshot[TokenType.SUPER.value], field)
+                if strategy == "round_robin":
+                    token_key, remaining = select_round_robin(snapshot[TokenType.SUPER.value], field, TokenType.SUPER.value)
+                else:
+                    token_key, remaining = select_best(snapshot[TokenType.SUPER.value], field)
 
         if token_key is None:
             raise GrokApiException(
